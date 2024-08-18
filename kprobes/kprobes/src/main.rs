@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use aya::programs::KProbe;
 use aya::{include_bytes_aligned, Bpf};
 use aya_log::BpfLogger;
@@ -34,14 +36,17 @@ async fn main() -> Result<(), anyhow::Error> {
     if let Err(e) = BpfLogger::init(&mut bpf) {
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {}", e);
-    }
-    let program: &mut KProbe = bpf.program_mut("kprobes").unwrap().try_into()?;
-    program.load()?;
-    program.attach("do_unlinkat", 0)?;
+    };
 
-    // let kretprobe_test: &mut KProbe = bpf.program_mut("kretprobe_test").unwrap().try_into()?;
-    // kretprobe_test.load()?;
-    // kretprobe_test.attach("do_unlinkat", 0)?;
+    let mut kprobes: HashMap<&str, &str> = HashMap::new();
+    kprobes.insert("kprobes", "do_unlinkat");
+    kprobes.insert("kretprobe_test", "do_unlinkat");
+
+    for hook in kprobes {
+        let program: &mut KProbe = bpf.program_mut(hook.0).unwrap().try_into()?;
+        program.load()?;
+        program.attach(hook.1, 0)?;
+    }
 
     info!("Waiting for Ctrl-C...");
     signal::ctrl_c().await?;
